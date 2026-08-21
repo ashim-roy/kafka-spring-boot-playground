@@ -1,6 +1,7 @@
 package com.ashimCS.learnKafka.notification_service.consumer;
 
-import com.ashimCS.learnKafka.notification_service.event.UserCreatedEvent;
+//import com.ashimCS.learnKafka.notification_service.event.UserCreatedEvent;
+import com.ashimCS.learnKafka.event.userCreatedEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Service;
 public class UserKafkaConsumer { //CONSUMER - this will consume from user kafka service
 
     @KafkaListener(topics = "user-created-topic")
-    public void handleUserCreated(UserCreatedEvent userCreatedEvent) {
+    public void handleUserCreated(userCreatedEvent userCreatedEvent) {
         log.info("Received UserCreatedEvent {}", userCreatedEvent);
     }
     // we had already deifned some listeners/clients in the notification service, so we can have multiple listeners for the same topic, and they will all receive the same message.

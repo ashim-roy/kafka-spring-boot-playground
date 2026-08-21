@@ -6,7 +6,10 @@ spring:
       #group-id: user-service-group
 #      auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.LongDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
+
+      #key-deserializer: org.apache.kafka.common.serialization.LongDeserializer
+      #value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
 #    producer:
 #      key-serializer: org.apache.kafka.common.serialization.StringSerializer
 #      value-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -14,6 +17,12 @@ spring:
       properties:
         "[spring.json.value.default.type]": com.ashimCS.learnKafka.notification_service.event.UserCreatedEvent   #What Java class should I create?
         "[spring.json.trusted.packages]": com.ashimCS.learnKafka.notification_service.event    #Am I allowed to create classes from this package?
+        schema:
+          registry:
+            url: "http://localhost:8081"
+        specific:
+          avro:
+            reader: "true"
 
 logging:
   pattern:
