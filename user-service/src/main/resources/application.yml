@@ -8,8 +8,17 @@ spring:
     bootstrap-servers: localhost:9092
     producer:
       key-serializer: org.apache.kafka.common.serialization.LongSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      #value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
         #Producer will serialize the value to JSON format
+
+      properties:
+        schema:
+          registry:
+            url: "http://localhost:8081"
+
+        #spring.json.value.default.type: com.ashimCS.learnKafka.user_service.event.UserCreatedEvent
+        #spring.json.trusted.packages: com.ashimCS.learnKafka.user_service.event
 
 
       #kafkaTemplate.send("user-topic", "user-101", "Hello Kafka");
