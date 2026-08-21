@@ -11,10 +11,18 @@ public class KafkaTopicConfig {
     @Value("${kafka.topic.name:user-random-topic}")
     private String KAFKA_RANDOM_TOPIC;
 
+    @Value("${kafka.topic.name:user-created-topic}")
+    private String KAFKA_USER_CREATED_TOPIC;
+
     @Bean
     public NewTopic userRandomTopic() {
        // return new NewTopic("user-random-topic", 3, (short) 1); // Name, partition, replication factor
         return new NewTopic(KAFKA_RANDOM_TOPIC, 3, (short) 1);    // Name, partition, replication factor
+    }
+
+    @Bean
+    public NewTopic userCreatedTopic() {
+        return new NewTopic(KAFKA_USER_CREATED_TOPIC, 2, (short) 1); // Name, partition, replication factor
     }
 }
 

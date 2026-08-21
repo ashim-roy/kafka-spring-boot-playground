@@ -1,6 +1,28 @@
 
-kafka.topic.user-random-topic: user-random-topic
+kafka.topic:
+  user-random-topic: user-random-topic
+  user-created-topic: user-created-topic
 
 spring:
   kafka:
     bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.LongSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+        #Producer will serialize the value to JSON format
+
+
+      #kafkaTemplate.send("user-topic", "user-101", "Hello Kafka");
+      #"user-101" → StringSerializer → byte[]
+      #"Hello Kafka" → StringSerializer → byte[]
+
+
+      #producer:
+      #      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      #      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      #producer:
+      #      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      #      value-serializer: io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer
+
+      #	Kafka transports byte arrays. The producer chooses a serializer to convert the key and value into bytes,
+      #	and the consumer chooses the corresponding deserializer to convert those bytes back into usable objects.

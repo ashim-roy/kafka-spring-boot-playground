@@ -546,5 +546,728 @@ Distributed Event-Driven Systems
 
 More advanced Kafka concepts and production-oriented patterns will be added as the project evolves.
 
+
+
+---
+
+## Kafka Producer and Consumer Configuration
+
+The project was extended to explore Kafka's producer and consumer configuration using Spring Boot.
+
+### Producer Configuration
+
+Spring Kafka provides `KafkaTemplate` as an abstraction for publishing messages to Kafka.
+
+Example:
+
+```java
+@RestController
+@Slf4j
+@RequestMapping("/users")
+@RequiredArgsConstructor
+public class UserController {
+
+    private final KafkaTemplate<String, String> kafkaTemplate;
+
+    @Value("${kafka.topic.name:user-random-topic}")
+    private String KAFKA_RANDOM_TOPIC;
+
+    @PostMapping("/{message}")
+    public ResponseEntity<String> sendMessage(@PathVariable String message) {
+
+        kafkaTemplate.send(KAFKA_RANDOM_TOPIC, message);
+
+        return ResponseEntity.ok("message queued");
+    }
+}
 ```
 
+The producer sends the message to the configured Kafka topic.
+
+---
+
+## Creating Kafka Topics with Spring Boot
+
+A Kafka topic can be created automatically using a `NewTopic` bean.
+
+```java
+@Configuration
+public class KafkaTopicConfig {
+
+    @Value("${kafka.topic.name:user-random-topic}")
+    private String KAFKA_RANDOM_TOPIC;
+
+    @Bean
+    public NewTopic userRandomTopic() {
+        return new NewTopic(
+                KAFKA_RANDOM_TOPIC,
+                3,
+                (short) 1
+        );
+    }
+}
+```
+
+The configuration means:
+
+```text
+Topic Name       → user-random-topic
+Partitions       → 3
+Replication      → 1
+```
+
+Spring Boot creates the topic when the application starts if it does not already exist.
+
+---
+
+## Kafka Message Keys and Partitioning
+
+Kafka messages can contain:
+
+- Key
+- Value
+
+Example:
+
+```java
+kafkaTemplate.send(
+        KAFKA_RANDOM_TOPIC,
+        "0",
+        "hello kafka"
+);
+```
+
+Here:
+
+```text
+Key   → "0"
+Value → "hello kafka"
+```
+
+The key is important because Kafka uses the key to determine which partition should receive the message.
+
+Conceptually:
+
+```text
+Message
+   |
+   | Key
+   ↓
+Hash(key)
+   |
+   ↓
+Partition
+```
+
+Therefore, messages with the same key are normally routed to the same partition.
+
+For example:
+
+```text
+user-101 → Partition 1
+user-101 → Partition 1
+user-101 → Partition 1
+
+user-102 → Partition 2
+user-102 → Partition 2
+```
+
+This is particularly important when message ordering needs to be maintained for a particular entity.
+
+### Sending Messages with Keys
+
+```java
+for (int i = 0; i < 1000; i++) {
+    kafkaTemplate.send(
+            KAFKA_RANDOM_TOPIC,
+            "" + i % 2,
+            message + " - " + i
+    );
+}
+```
+
+This produces keys:
+
+```text
+0
+1
+0
+1
+0
+1
+...
+```
+
+The producer uses the key when determining the target partition.
+
+---
+
+## Sending Messages Without a Key
+
+A message can also be sent without explicitly providing a key:
+
+```java
+kafkaTemplate.send(
+        KAFKA_RANDOM_TOPIC,
+        message
+);
+```
+
+In this case, the producer does not have a key to use for key-based partitioning.
+
+---
+
+## Producer and Consumer Serialization
+
+Kafka ultimately transports data as bytes.
+
+A Java object cannot simply be sent directly over the network. The producer therefore serializes the key and value before sending them to Kafka.
+
+```text
+Java Object / String
+        |
+        ↓
+   Serializer
+        |
+        ↓
+      byte[]
+        |
+        ↓
+      Kafka
+```
+
+The consumer performs the reverse operation:
+
+```text
+Kafka
+  |
+  ↓
+byte[]
+  |
+  ↓
+Deserializer
+  |
+  ↓
+Java Object / String
+```
+
+### String Serialization
+
+For String keys and values:
+
+```yaml
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+```
+
+### JSON Serialization
+
+For Java objects, JSON can be used as the serialization format.
+
+With Spring Boot 4 / Spring Kafka 4, the Jackson 3 compatible serializers are used:
+
+```yaml
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.LongSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
+
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.LongDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+```
+
+Conceptually:
+
+```text
+Producer
+
+Java Object
+    ↓
+JacksonJsonSerializer
+    ↓
+JSON
+    ↓
+byte[]
+    ↓
+Kafka
+```
+
+Consumer:
+
+```text
+Kafka
+  ↓
+byte[]
+  ↓
+JacksonJsonDeserializer
+  ↓
+JSON
+  ↓
+Java Object
+```
+
+JSON is only one serialization format. Kafka applications can also use formats such as:
+
+- String
+- JSON
+- Avro
+- Protobuf
+
+Kafka itself transports bytes; the producer and consumer decide how those bytes are serialized and deserialized.
+
+---
+
+## JSON Deserialization Configuration
+
+When consuming JSON, the consumer needs to know which Java class should be created from the incoming JSON.
+
+Example:
+
+```yaml
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.LongDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
+
+      properties:
+        "[spring.json.value.default.type]": com.ashimCS.learnKafka.notification_service.event.UserCreatedEvent
+        "[spring.json.trusted.packages]": com.ashimCS.learnKafka.notification_service.event
+```
+
+These two properties have different purposes:
+
+```text
+spring.json.value.default.type
+→ What Java class should I create?
+
+spring.json.trusted.packages
+→ Am I allowed to create classes from this package?
+```
+
+For example:
+
+```text
+Kafka JSON
+    ↓
+JacksonJsonDeserializer
+    ↓
+UserCreatedEvent
+    ↓
+Check trusted package
+    ↓
+Create Java object
+```
+
+---
+
+## Kafka Consumer
+
+Messages can be consumed using Spring Kafka's `@KafkaListener`.
+
+```java
+@Service
+@Slf4j
+public class UserKafkaConsumer {
+
+    @KafkaListener(
+            topics = "${kafka.topic.name:user-random-topic}",
+            groupId = "notification-service-group"
+    )
+    public void consumeFromUserRandomTopic(String message) {
+
+        log.info(
+                "Received message from user random topic: {}",
+                message
+        );
+    }
+}
+```
+
+The `@KafkaListener` tells Spring:
+
+> Listen to the specified Kafka topic and invoke this method when a message is received.
+
+The consumed message is injected into the method parameter:
+
+```java
+public void consumeFromUserRandomTopic(String message)
+```
+
+---
+
+## Consumer Groups
+
+A `groupId` identifies a Kafka consumer group.
+
+For example:
+
+```java
+@KafkaListener(
+        topics = "user-random-topic",
+        groupId = "notification-service-group"
+)
+```
+
+Consumers belonging to the same group share the partitions of a topic.
+
+For a topic with three partitions:
+
+```text
+user-random-topic
+       |
+   3 partitions
+   /    |    \
+  P0    P1    P2
+   \    |    /
+    Consumer Group
+```
+
+If there are three consumers in the same group:
+
+```text
+Consumer 1 → Partition 0
+Consumer 2 → Partition 1
+Consumer 3 → Partition 2
+```
+
+This allows Kafka consumers to process messages in parallel.
+
+A key concept is:
+
+> **Within a consumer group, a partition is assigned to only one consumer at a time.**
+
+---
+
+## Producer → Kafka → Consumer Flow
+
+The project demonstrates the complete event flow:
+
+```text
+                 User Service
+                     |
+                     |
+              KafkaTemplate
+                     |
+                     ↓
+                Serializer
+                     |
+                     ↓
+                  Kafka
+                     |
+                     ↓
+               Deserializer
+                     |
+                     ↓
+            Notification Service
+                     |
+                     |
+               @KafkaListener
+                     |
+                     ↓
+              Event Processing
+```
+
+For JSON events:
+
+```text
+UserCreatedEvent
+      ↓
+JacksonJsonSerializer
+      ↓
+byte[]
+      ↓
+Kafka Topic
+      ↓
+byte[]
+      ↓
+JacksonJsonDeserializer
+      ↓
+UserCreatedEvent
+```
+
+---
+
+## Kafka Producer Configuration
+
+Some important producer configurations explored in the project:
+
+```yaml
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+```
+
+### `bootstrap-servers`
+
+Specifies the Kafka broker address:
+
+```text
+localhost:9092
+```
+
+### `acks`
+
+Controls the level of acknowledgement required from Kafka.
+
+```yaml
+acks: all
+```
+
+means the producer waits for acknowledgement from all in-sync replicas.
+
+### `retries`
+
+```yaml
+retries: 3
+```
+
+Allows the producer to retry a failed send when the failure is retryable.
+
+---
+
+## Kafka Consumer Configuration
+
+Example:
+
+```yaml
+spring:
+  kafka:
+    consumer:
+      group-id: my-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 100
+```
+
+### `group-id`
+
+Identifies the consumer group.
+
+```yaml
+group-id: my-group
+```
+
+Consumers with the same group ID share partitions.
+
+### `auto-offset-reset`
+
+```yaml
+auto-offset-reset: earliest
+```
+
+When a consumer has no previously committed offset, it starts reading from the earliest available offset.
+
+### `enable-auto-commit`
+
+```yaml
+enable-auto-commit: false
+```
+
+Disables automatic consumer offset commits, allowing the application/framework to control when offsets are committed.
+
+Conceptually:
+
+```text
+Read Message
+     ↓
+Process Message
+     ↓
+Successful Processing
+     ↓
+Commit Offset
+```
+
+### `max-poll-records`
+
+```yaml
+max-poll-records: 100
+```
+
+Controls the maximum number of records returned in a single consumer `poll()` operation.
+
+It does not mean the consumer can consume only 100 messages. It means each poll can return up to 100 records. The default value is 500. So, conceptually, a consumer can receive up to 500 records in a single poll() call. You can configure it to smaller or larger values depending on your application's processing capacity.
+
+A more powerful server with sufficient CPU, memory, and processing capacity may be able to handle a higher number of records per poll. However, increasing this value does not automatically mean higher throughput—the application must also have enough resources to process the records efficiently.
+
+---
+
+## PostgreSQL and JPA
+
+The User Service also persists users using Spring Data JPA and PostgreSQL.
+
+Example entity:
+
+```java
+@Getter
+@Setter
+@NoArgsConstructor
+@Entity
+@Table(name = "app_users")
+public class User {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String fullName;
+
+    private String email;
+}
+```
+
+Repository:
+
+```java
+public interface UserRepository
+        extends JpaRepository<User, Long> {
+}
+```
+
+The basic flow is:
+
+```text
+CreateUserRequestDto
+        ↓
+ModelMapper
+        ↓
+User Entity
+        ↓
+UserRepository.save()
+        ↓
+PostgreSQL
+```
+
+---
+
+## User Created Event
+
+An event object is used to represent information that can be published to Kafka.
+
+Example:
+
+```java
+@Data
+public class UserCreatedEvent {
+
+    private Long id;
+
+    private String email;
+}
+```
+
+The event can be serialized into JSON before being published:
+
+```text
+UserCreatedEvent
+      ↓
+JacksonJsonSerializer
+      ↓
+JSON
+      ↓
+Kafka
+```
+
+The Notification Service can then deserialize the message:
+
+```text
+Kafka
+  ↓
+JacksonJsonDeserializer
+  ↓
+UserCreatedEvent
+  ↓
+@KafkaListener
+```
+
+---
+
+## Key Kafka Concepts Covered
+
+This project currently covers:
+
+- Kafka brokers
+- Topics
+- Partitions
+- Replication
+- Producer
+- Consumer
+- Consumer groups
+- Kafka keys
+- Partition selection
+- `KafkaTemplate`
+- `@KafkaListener`
+- Serialization
+- Deserialization
+- String serialization
+- JSON serialization
+- Jackson JSON serialization/deserialization
+- Producer acknowledgements
+- Producer retries
+- Consumer offsets
+- Auto offset reset
+- Manual offset commit configuration
+- Consumer polling
+- PostgreSQL integration
+- Spring Data JPA
+- Event-based communication between services
+
+---
+
+## Current Architecture
+
+```text
+                  ┌────────────────────┐
+                  │    User Service    │
+                  │                    │
+                  │ Spring Boot        │
+                  │ PostgreSQL/JPA     │
+                  │ KafkaTemplate      │
+                  └─────────┬──────────┘
+                            │
+                            │ UserCreatedEvent
+                            ↓
+                    ┌───────────────┐
+                    │     Kafka     │
+                    │               │
+                    │ user-random-  │
+                    │ topic         │
+                    │               │
+                    │ 3 partitions  │
+                    └───────┬───────┘
+                            │
+                            │ JSON event
+                            ↓
+                  ┌────────────────────┐
+                  │ Notification       │
+                  │ Service            │
+                  │                    │
+                  │ @KafkaListener     │
+                  │ JSON Deserializer  │
+                  └────────────────────┘
+```
+
+The project is intentionally being built incrementally to understand Kafka fundamentals first and then move toward more advanced event-driven microservice patterns.
