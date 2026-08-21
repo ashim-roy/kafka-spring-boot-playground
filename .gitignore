@@ -1,0 +1,25 @@
+# IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Maven
+target/
+*/target/
+
+# Java
+*.class
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+
+# Environment / secrets
+.env
+*.env
+
+# Kafka local files
+logs/
